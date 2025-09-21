@@ -11,6 +11,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	exectool "exec-mcp/internal/tools/exec"
+	stoptool "exec-mcp/internal/tools/stop"
 )
 
 func TestCreateServer(t *testing.T) {
@@ -40,13 +42,24 @@ func TestServerTools(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, tools.Tools, 2)
 
-	// Verify tool names
-	toolNames := make(map[string]bool)
-	for _, tool := range tools.Tools {
-		toolNames[tool.Name] = true
+	// Get expected tool names from our tool structs
+	expectedTools := GetTools()
+	expectedNames := make(map[string]bool)
+	for _, tool := range expectedTools {
+		expectedNames[tool.Name()] = true
 	}
-	assert.True(t, toolNames["exec_process"])
-	assert.True(t, toolNames["stop_process"])
+
+	// Verify tool names match our tool structs
+	actualNames := make(map[string]bool)
+	for _, tool := range tools.Tools {
+		actualNames[tool.Name] = true
+		assert.True(t, expectedNames[tool.Name], "Tool name %s should be in expected tools", tool.Name)
+	}
+	
+	// Verify we have all expected tools
+	for expectedName := range expectedNames {
+		assert.True(t, actualNames[expectedName], "Expected tool %s should be present", expectedName)
+	}
 }
 
 func TestServerExecProcessIntegration(t *testing.T) {
@@ -78,8 +91,10 @@ func TestServerExecProcessIntegration(t *testing.T) {
 		args = []string{"test"}
 	}
 
+	// Get tool name from tool struct
+	execTool := exectool.NewExecProcessTool()
 	params := &mcp.CallToolParams{
-		Name: "exec_process",
+		Name: execTool.Name(),
 		Arguments: map[string]any{
 			"command": command,
 			"args":    args,
@@ -137,8 +152,9 @@ func TestServerStopProcessIntegration(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test stop_process tool
+	stopTool := stoptool.NewStopProcessTool()
 	params := &mcp.CallToolParams{
-		Name: "stop_process",
+		Name: stopTool.Name(),
 		Arguments: map[string]any{
 			"pid":  pid,
 			"kill": false,
@@ -189,8 +205,9 @@ func TestServerWorkflowIntegration(t *testing.T) {
 		args = []string{"5"}
 	}
 
+	execTool := exectool.NewExecProcessTool()
 	execParams := &mcp.CallToolParams{
-		Name: "exec_process",
+		Name: execTool.Name(),
 		Arguments: map[string]any{
 			"command": command,
 			"args":    args,
@@ -213,8 +230,9 @@ func TestServerWorkflowIntegration(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Step 4: Stop the process using the PID from exec_process
+	stopTool := stoptool.NewStopProcessTool()
 	stopParams := &mcp.CallToolParams{
-		Name: "stop_process",
+		Name: stopTool.Name(),
 		Arguments: map[string]any{
 			"pid":  pid, // Use the real PID from exec_process
 			"kill": false,
@@ -269,8 +287,9 @@ func TestServerMultipleProcessWorkflow(t *testing.T) {
 			args = []string{"3"}
 		}
 
+		execTool := exectool.NewExecProcessTool()
 		execParams := &mcp.CallToolParams{
-			Name: "exec_process",
+			Name: execTool.Name(),
 			Arguments: map[string]any{
 				"command": command,
 				"args":    args,
@@ -295,8 +314,9 @@ func TestServerMultipleProcessWorkflow(t *testing.T) {
 
 	// Step 3: Stop all processes using their PIDs
 	for i, pid := range pids {
+		stopTool := stoptool.NewStopProcessTool()
 		stopParams := &mcp.CallToolParams{
-			Name: "stop_process",
+			Name: stopTool.Name(),
 			Arguments: map[string]any{
 				"pid":  pid,
 				"kill": false,
@@ -348,8 +368,9 @@ func TestServerNonBlockingBehavior(t *testing.T) {
 		args = []string{"test"}
 	}
 
+	execTool := exectool.NewExecProcessTool()
 	params := &mcp.CallToolParams{
-		Name: "exec_process",
+		Name: execTool.Name(),
 		Arguments: map[string]any{
 			"command": command,
 			"args":    args,
@@ -459,8 +480,9 @@ func TestServerConcurrentConnections(t *testing.T) {
 
 	// Test that all connections can make tool calls
 	for i, conn := range connections {
+		execTool := exectool.NewExecProcessTool()
 		params := &mcp.CallToolParams{
-			Name: "exec_process",
+			Name: execTool.Name(),
 			Arguments: map[string]any{
 				"command": "echo",
 				"args":    []string{fmt.Sprintf("connection-%d", i)},

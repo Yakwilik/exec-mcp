@@ -1,7 +1,10 @@
 package mcp
 
 import (
+	"context"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"exec-mcp/internal/tools"
 	"exec-mcp/internal/tools/exec"
 	"exec-mcp/internal/tools/stop"
 )
@@ -10,17 +13,32 @@ import (
 func CreateServer() *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "exec-mcp", Version: "1.0.0"}, nil)
 
-	// Add exec_process tool
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "exec_process",
-		Description: "Execute a process and return its PID for later management",
-	}, exec.ExecProcessTool)
+	// Create tool instances
+	execTool := exec.NewExecProcessTool()
+	stopTool := stop.NewStopProcessTool()
 
-	// Add stop_process tool
+	// Add tools to server using the generic AddTool with proper schema
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "stop_process",
-		Description: "Stop a process by its PID using SIGTERM or SIGKILL",
-	}, stop.StopProcessTool)
+		Name:        execTool.Name(),
+		Description: execTool.Description(),
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args exec.Args) (*mcp.CallToolResult, any, error) {
+		return execTool.Handle(ctx, req)
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        stopTool.Name(),
+		Description: stopTool.Description(),
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args stop.Args) (*mcp.CallToolResult, any, error) {
+		return stopTool.Handle(ctx, req)
+	})
 
 	return server
+}
+
+// GetTools returns all available tools
+func GetTools() []tools.Tool {
+	return []tools.Tool{
+		exec.NewExecProcessTool(),
+		stop.NewStopProcessTool(),
+	}
 }

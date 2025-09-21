@@ -2,10 +2,9 @@ package stop
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -15,28 +14,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// createTestScript creates a temporary script for testing
-func createTestScript(t *testing.T, script string) string {
-	dir := t.TempDir()
-	
-	var scriptFile string
-	var scriptContent string
-	
-	if runtime.GOOS == "windows" {
-		scriptFile = filepath.Join(dir, "test.bat")
-		scriptContent = script
-	} else {
-		scriptFile = filepath.Join(dir, "test.sh")
-		scriptContent = "#!/bin/bash\n" + script
-	}
-	
-	err := os.WriteFile(scriptFile, []byte(scriptContent), 0755)
-	require.NoError(t, err)
-	
-	return scriptFile
-}
-
 func TestStopProcessTool(t *testing.T) {
+	tool := NewStopProcessTool()
+
+	t.Run("tool name and description", func(t *testing.T) {
+		assert.Equal(t, "stop_process", tool.Name())
+		assert.Equal(t, "Stop a process by its PID using SIGTERM or SIGKILL", tool.Description())
+	})
+
 	t.Run("successful process termination with SIGTERM", func(t *testing.T) {
 		// Start a long-running process
 		var cmd *exec.Cmd
@@ -59,26 +44,20 @@ func TestStopProcessTool(t *testing.T) {
 		
 		// Wait a bit to ensure process is running
 		time.Sleep(100 * time.Millisecond)
-		
-		// Verify process is running
-		process, err := os.FindProcess(pid)
-		require.NoError(t, err)
-		require.NotNil(t, process)
 
 		// Now test the stop tool
 		ctx := context.Background()
 		req := &mcp.CallToolRequest{
 			Params: &mcp.CallToolParamsRaw{
-				Name: "stop_process",
+				Name: tool.Name(),
 			},
 		}
 
-		stopArgs := Args{
-			PID:  pid,
-			Kill: false, // Use SIGTERM
-		}
+		// Set up request arguments
+		argsJSON := fmt.Sprintf(`{"pid": %d, "kill": false}`, pid)
+		req.Params.Arguments = json.RawMessage(argsJSON)
 
-		result, data, err := StopProcessTool(ctx, req, stopArgs)
+		result, data, err := tool.Handle(ctx, req)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -130,16 +109,15 @@ func TestStopProcessTool(t *testing.T) {
 		ctx := context.Background()
 		req := &mcp.CallToolRequest{
 			Params: &mcp.CallToolParamsRaw{
-				Name: "stop_process",
+				Name: tool.Name(),
 			},
 		}
 
-		stopArgs := Args{
-			PID:  pid,
-			Kill: true, // Use SIGKILL
-		}
+		// Set up request arguments with kill=true
+		argsJSON := fmt.Sprintf(`{"pid": %d, "kill": true}`, pid)
+		req.Params.Arguments = json.RawMessage(argsJSON)
 
-		result, data, err := StopProcessTool(ctx, req, stopArgs)
+		result, data, err := tool.Handle(ctx, req)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -168,17 +146,15 @@ func TestStopProcessTool(t *testing.T) {
 		ctx := context.Background()
 		req := &mcp.CallToolRequest{
 			Params: &mcp.CallToolParamsRaw{
-				Name: "stop_process",
+				Name: tool.Name(),
 			},
 		}
 
 		// Use a very high PID that's unlikely to exist
-		stopArgs := Args{
-			PID:  99999,
-			Kill: false,
-		}
+		argsJSON := `{"pid": 99999, "kill": false}`
+		req.Params.Arguments = json.RawMessage(argsJSON)
 
-		result, data, err := StopProcessTool(ctx, req, stopArgs)
+		result, data, err := tool.Handle(ctx, req)
 
 		// Should return an error
 		assert.Error(t, err)
@@ -190,7 +166,7 @@ func TestStopProcessTool(t *testing.T) {
 		assert.IsType(t, &mcp.TextContent{}, result.Content[0])
 		
 		textContent := result.Content[0].(*mcp.TextContent)
-		// The exact error message may vary, but should contain an error about the process
+		// The error message may vary, but should contain an error about the process
 		assert.Contains(t, textContent.Text, "Error sending signal to process 99999")
 	})
 
@@ -198,16 +174,14 @@ func TestStopProcessTool(t *testing.T) {
 		ctx := context.Background()
 		req := &mcp.CallToolRequest{
 			Params: &mcp.CallToolParamsRaw{
-				Name: "stop_process",
+				Name: tool.Name(),
 			},
 		}
 
-		stopArgs := Args{
-			PID:  0,
-			Kill: false,
-		}
+		argsJSON := `{"pid": 0, "kill": false}`
+		req.Params.Arguments = json.RawMessage(argsJSON)
 
-		result, data, err := StopProcessTool(ctx, req, stopArgs)
+		result, data, err := tool.Handle(ctx, req)
 
 		// Should return an error
 		assert.Error(t, err)
@@ -249,17 +223,15 @@ func TestStopProcessTool(t *testing.T) {
 		ctx := context.Background()
 		req := &mcp.CallToolRequest{
 			Params: &mcp.CallToolParamsRaw{
-				Name: "stop_process",
+				Name: tool.Name(),
 			},
 		}
 
-		stopArgs := Args{
-			PID:  pid,
-			Kill: false,
-		}
+		argsJSON := fmt.Sprintf(`{"pid": %d, "kill": false}`, pid)
+		req.Params.Arguments = json.RawMessage(argsJSON)
 
 		start := time.Now()
-		result, data, err := StopProcessTool(ctx, req, stopArgs)
+		result, data, err := tool.Handle(ctx, req)
 		elapsed := time.Since(start)
 
 		require.NoError(t, err)
@@ -275,63 +247,7 @@ func TestStopProcessTool(t *testing.T) {
 }
 
 func TestStopProcessToolIntegration(t *testing.T) {
-	t.Run("start and stop process workflow", func(t *testing.T) {
-		// This test simulates the typical workflow: start a process, then stop it
-		
-		// Step 1: Start a process
-		var cmd *exec.Cmd
-		var command string
-		var args []string
-		
-		if runtime.GOOS == "windows" {
-			command = "cmd"
-			args = []string{"/c", "ping", "127.0.0.1", "-n", "5"}
-		} else {
-			command = "sleep"
-			args = []string{"5"}
-		}
-		
-		cmd = exec.Command(command, args...)
-		err := cmd.Start()
-		require.NoError(t, err)
-		
-		pid := cmd.Process.Pid
-		
-		// Verify process is running
-		process, err := os.FindProcess(pid)
-		require.NoError(t, err)
-		require.NotNil(t, process)
-
-		// Wait a bit to ensure process is running
-		time.Sleep(100 * time.Millisecond)
-
-		// Step 2: Stop the process using our tool
-		ctx := context.Background()
-		req := &mcp.CallToolRequest{
-			Params: &mcp.CallToolParamsRaw{
-				Name: "stop_process",
-			},
-		}
-
-		stopArgs := Args{
-			PID:  pid,
-			Kill: false,
-		}
-
-		result, data, err := StopProcessTool(ctx, req, stopArgs)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.NotNil(t, data)
-
-		// Verify the stop was successful
-		textContent := result.Content[0].(*mcp.TextContent)
-		assert.Contains(t, textContent.Text, "Signal SIGTERM sent to process")
-		assert.Contains(t, textContent.Text, fmt.Sprintf("%d", pid))
-
-		// Step 3: Wait for process to actually terminate
-		cmd.Wait()
-	})
+	tool := NewStopProcessTool()
 
 	t.Run("complete workflow with exec and stop tools", func(t *testing.T) {
 		// This test demonstrates the complete workflow that would be used by an agent:
@@ -366,16 +282,14 @@ func TestStopProcessToolIntegration(t *testing.T) {
 		ctx := context.Background()
 		req := &mcp.CallToolRequest{
 			Params: &mcp.CallToolParamsRaw{
-				Name: "stop_process",
+				Name: tool.Name(),
 			},
 		}
 
-		stopArgs := Args{
-			PID:  pid, // Use the PID from the exec tool
-			Kill: false,
-		}
+		argsJSON := fmt.Sprintf(`{"pid": %d, "kill": false}`, pid)
+		req.Params.Arguments = json.RawMessage(argsJSON)
 
-		result, data, err := StopProcessTool(ctx, req, stopArgs)
+		result, data, err := tool.Handle(ctx, req)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -397,64 +311,5 @@ func TestStopProcessToolIntegration(t *testing.T) {
 
 		// Step 4: Wait for process to actually terminate
 		cmd.Wait()
-	})
-
-	t.Run("multiple process termination", func(t *testing.T) {
-		// Start multiple processes
-		numProcesses := 3
-		cmds := make([]*exec.Cmd, numProcesses)
-		pids := make([]int, numProcesses)
-		
-		for i := 0; i < numProcesses; i++ {
-			var command string
-			var args []string
-			
-			if runtime.GOOS == "windows" {
-				command = "cmd"
-				args = []string{"/c", "ping", "127.0.0.1", "-n", "5"}
-			} else {
-				command = "sleep"
-				args = []string{"5"}
-			}
-			
-			cmd := exec.Command(command, args...)
-			err := cmd.Start()
-			require.NoError(t, err)
-			
-			cmds[i] = cmd
-			pids[i] = cmd.Process.Pid
-		}
-
-		// Wait a bit to ensure processes are running
-		time.Sleep(100 * time.Millisecond)
-
-		// Stop all processes
-		ctx := context.Background()
-		req := &mcp.CallToolRequest{
-			Params: &mcp.CallToolParamsRaw{
-				Name: "stop_process",
-			},
-		}
-
-		for i, pid := range pids {
-			stopArgs := Args{
-				PID:  pid,
-				Kill: false,
-			}
-
-			result, data, err := StopProcessTool(ctx, req, stopArgs)
-
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			require.NotNil(t, data)
-
-			// Verify each stop was successful
-			textContent := result.Content[0].(*mcp.TextContent)
-			assert.Contains(t, textContent.Text, "Signal SIGTERM sent to process")
-			assert.Contains(t, textContent.Text, fmt.Sprintf("%d", pid))
-
-			// Clean up
-			cmds[i].Wait()
-		}
 	})
 }

@@ -142,9 +142,28 @@ The project is organized into separate packages for maintainability:
 
 - `./cmd/exec-mcp/main.go`: Main entry point
 - `./internal/mcp/server.go`: MCP server setup and configuration
-- `./internal/tools/exec/`: Process execution tool
-- `./internal/tools/stop/`: Process termination tool
+- `./internal/tools/tool.go`: Tool interface definition
+- `./internal/tools/exec/`: Process execution tool (struct-based)
+- `./internal/tools/stop/`: Process termination tool (struct-based)
 - `./internal/mcp/test_helpers.go`: Helper functions for extracting structured data
+
+### Tool Architecture
+
+Each tool is implemented as a struct that implements the `Tool` interface:
+
+```go
+type Tool interface {
+    Name() string
+    Description() string
+    Handle(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, any, error)
+}
+```
+
+This approach provides:
+- **No hardcoded tool names**: Names are retrieved from tool structs
+- **Self-documenting**: Each tool provides its own name and description
+- **Type safety**: Interface ensures consistent tool implementation
+- **Easy testing**: Tools can be tested independently
 
 ## Benefits
 

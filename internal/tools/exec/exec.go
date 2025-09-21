@@ -28,8 +28,41 @@ type ProcessInfo struct {
 	Status    string    `json:"status"`
 }
 
-// ExecProcessTool executes a process and returns its PID
-func ExecProcessTool(ctx context.Context, req *mcp.CallToolRequest, args Args) (*mcp.CallToolResult, any, error) {
+// ExecProcessTool represents the exec_process tool
+type ExecProcessTool struct{}
+
+// Name returns the tool name
+func (t *ExecProcessTool) Name() string {
+	return "exec_process"
+}
+
+// Description returns the tool description
+func (t *ExecProcessTool) Description() string {
+	return "Execute a process and return its PID for later management"
+}
+
+// Handle processes the tool call
+func (t *ExecProcessTool) Handle(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, any, error) {
+	if req.Params == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "Missing parameters"},
+			},
+		}, nil, fmt.Errorf("missing parameters")
+	}
+
+	// Parse arguments from the request
+	var args Args
+	if req.Params.Arguments != nil {
+		if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: fmt.Sprintf("Error parsing arguments: %v", err)},
+				},
+			}, nil, err
+		}
+	}
+
 	if args.Command == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -84,4 +117,9 @@ func ExecProcessTool(ctx context.Context, req *mcp.CallToolRequest, args Args) (
 			&mcp.TextContent{Text: fmt.Sprintf("Process started successfully:\n%s", string(resultJSON))},
 		},
 	}, processInfo, nil
+}
+
+// NewExecProcessTool creates a new exec_process tool instance
+func NewExecProcessTool() *ExecProcessTool {
+	return &ExecProcessTool{}
 }
