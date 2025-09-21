@@ -6,11 +6,29 @@ A Model Context Protocol (MCP) server that provides tools for executing and mana
 
 - **exec_process**: Execute a process and return its PID for later management
 - **stop_process**: Stop a process by its PID using SIGTERM or SIGKILL
+- **Non-blocking**: Processes run detached and don't block the MCP server
+- **Concurrent**: Multiple processes can be managed simultaneously
 
 ## Building
 
 ```bash
 go build -o exec-mcp ./cmd/exec-mcp
+```
+
+## Testing
+
+Run the comprehensive test suite:
+
+```bash
+# Run all tests
+go test ./... -v
+
+# Run specific tool tests
+go test ./internal/tools/exec/ -v
+go test ./internal/tools/stop/ -v
+
+# Run integration tests
+go test ./internal/mcp/ -v
 ```
 
 ## Usage
@@ -42,6 +60,17 @@ Execute a process and return its PID.
 }
 ```
 
+**Response:**
+```json
+{
+  "pid": 12345,
+  "command": "ls",
+  "args": ["-l", "/tmp"],
+  "start_time": "2024-01-01T12:00:00Z",
+  "status": "running"
+}
+```
+
 ### stop_process
 
 Stop a process by its PID using SIGTERM or SIGKILL.
@@ -58,6 +87,24 @@ Stop a process by its PID using SIGTERM or SIGKILL.
 }
 ```
 
+**Response:**
+```json
+{
+  "pid": 12345,
+  "signal": "SIGTERM",
+  "status": "signal_sent"
+}
+```
+
+## Architecture
+
+The project is organized into separate packages for maintainability:
+
+- `./cmd/exec-mcp/main.go`: Main entry point
+- `./internal/mcp/server.go`: MCP server setup and configuration
+- `./internal/tools/exec/`: Process execution tool
+- `./internal/tools/stop/`: Process termination tool
+
 ## Benefits
 
 This MCP server enables agents to:
@@ -65,5 +112,6 @@ This MCP server enables agents to:
 - Stop processes without needing to search for them using terminal commands
 - Manage multiple processes concurrently with their exact process IDs
 - Use proper signal handling (SIGTERM/SIGKILL) for clean process termination
+- Run processes in detached mode without blocking the MCP server
 
 Without this MCP, agents typically need to use terminal commands like `ps`, `grep`, and `kill` to find and manage processes, which is less reliable and more complex.
