@@ -333,6 +333,72 @@ func TestStopProcessToolIntegration(t *testing.T) {
 		cmd.Wait()
 	})
 
+	t.Run("complete workflow with exec and stop tools", func(t *testing.T) {
+		// This test demonstrates the complete workflow that would be used by an agent:
+		// 1. Start a process using exec tool (simulated)
+		// 2. Get the PID from the response
+		// 3. Stop the process using stop tool with that PID
+		
+		// Step 1: Start a process (simulating what exec_process tool would do)
+		var cmd *exec.Cmd
+		var command string
+		var args []string
+		
+		if runtime.GOOS == "windows" {
+			command = "cmd"
+			args = []string{"/c", "ping", "127.0.0.1", "-n", "3"}
+		} else {
+			command = "sleep"
+			args = []string{"3"}
+		}
+		
+		cmd = exec.Command(command, args...)
+		err := cmd.Start()
+		require.NoError(t, err)
+		
+		pid := cmd.Process.Pid
+		t.Logf("Started process with PID: %d", pid)
+
+		// Step 2: Wait a bit to ensure process is running
+		time.Sleep(100 * time.Millisecond)
+
+		// Step 3: Stop the process using stop_process tool with the PID
+		ctx := context.Background()
+		req := &mcp.CallToolRequest{
+			Params: &mcp.CallToolParamsRaw{
+				Name: "stop_process",
+			},
+		}
+
+		stopArgs := Args{
+			PID:  pid, // Use the PID from the exec tool
+			Kill: false,
+		}
+
+		result, data, err := StopProcessTool(ctx, req, stopArgs)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.NotNil(t, data)
+
+		// Verify the stop was successful
+		textContent := result.Content[0].(*mcp.TextContent)
+		assert.Contains(t, textContent.Text, "Signal SIGTERM sent to process")
+		assert.Contains(t, textContent.Text, fmt.Sprintf("%d", pid))
+
+		// Verify the data structure
+		resultData, ok := data.(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, pid, resultData["pid"])
+		assert.Equal(t, "SIGTERM", resultData["signal"])
+		assert.Equal(t, "signal_sent", resultData["status"])
+
+		t.Logf("Successfully stopped process with PID: %d", pid)
+
+		// Step 4: Wait for process to actually terminate
+		cmd.Wait()
+	})
+
 	t.Run("multiple process termination", func(t *testing.T) {
 		// Start multiple processes
 		numProcesses := 3

@@ -177,16 +177,16 @@ func TestServerWorkflowIntegration(t *testing.T) {
 	require.NoError(t, err)
 	defer clientSession.Close()
 
-	// Step 1: Start a long-running process
+	// Step 1: Start a long-running process using exec_process tool
 	var command string
 	var args []string
 	
 	if runtime.GOOS == "windows" {
 		command = "cmd"
-		args = []string{"/c", "ping", "127.0.0.1", "-n", "10"}
+		args = []string{"/c", "ping", "127.0.0.1", "-n", "5"}
 	} else {
 		command = "sleep"
-		args = []string{"10"}
+		args = []string{"5"}
 	}
 
 	execParams := &mcp.CallToolParams{
@@ -200,22 +200,23 @@ func TestServerWorkflowIntegration(t *testing.T) {
 	execResult, err := clientSession.CallTool(ctx, execParams)
 	require.NoError(t, err)
 	require.NotNil(t, execResult)
+	require.Len(t, execResult.Content, 1)
 
-	// Extract PID from the result (this is a simplified approach)
-	// In a real scenario, you'd parse the JSON response
-	textContent, ok := execResult.Content[0].(*mcp.TextContent)
-	require.True(t, ok)
-	assert.Contains(t, textContent.Text, "Process started successfully")
+	// Step 2: Extract PID from exec_process response
+	pid, err := extractPIDFromExecResponse(execResult)
+	require.NoError(t, err)
+	require.Greater(t, pid, 0, "PID should be greater than 0")
 
-	// Step 2: Wait a bit to ensure process is running
+	t.Logf("Successfully started process with PID: %d", pid)
+
+	// Step 3: Wait a bit to ensure process is running
 	time.Sleep(100 * time.Millisecond)
 
-	// Step 3: Stop the process (we'll use a known PID for this test)
-	// In a real scenario, you'd extract the PID from the exec result
+	// Step 4: Stop the process using the PID from exec_process
 	stopParams := &mcp.CallToolParams{
 		Name: "stop_process",
 		Arguments: map[string]any{
-			"pid":  99999, // Non-existent PID for testing
+			"pid":  pid, // Use the real PID from exec_process
 			"kill": false,
 		},
 	}
@@ -223,12 +224,99 @@ func TestServerWorkflowIntegration(t *testing.T) {
 	stopResult, err := clientSession.CallTool(ctx, stopParams)
 	require.NoError(t, err)
 	require.NotNil(t, stopResult)
+	require.Len(t, stopResult.Content, 1)
 
-	// Verify error handling for non-existent process
+	// Step 5: Verify successful termination
 	stopTextContent, ok := stopResult.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
-	// The error message should indicate the process issue
-	assert.Contains(t, stopTextContent.Text, "process already finished")
+	assert.Contains(t, stopTextContent.Text, "Signal SIGTERM sent to process")
+	assert.Contains(t, stopTextContent.Text, fmt.Sprintf("%d", pid))
+
+	t.Logf("Successfully stopped process with PID: %d", pid)
+}
+
+func TestServerMultipleProcessWorkflow(t *testing.T) {
+	server := CreateServer()
+	require.NotNil(t, server)
+
+	// Set up client-server connection
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	require.NoError(t, err)
+	defer serverSession.Close()
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer clientSession.Close()
+
+	// Test workflow with multiple processes
+	numProcesses := 3
+	pids := make([]int, 0, numProcesses)
+
+	// Step 1: Start multiple processes
+	for i := 0; i < numProcesses; i++ {
+		var command string
+		var args []string
+		
+		if runtime.GOOS == "windows" {
+			command = "cmd"
+			args = []string{"/c", "ping", "127.0.0.1", "-n", "3"}
+		} else {
+			command = "sleep"
+			args = []string{"3"}
+		}
+
+		execParams := &mcp.CallToolParams{
+			Name: "exec_process",
+			Arguments: map[string]any{
+				"command": command,
+				"args":    args,
+			},
+		}
+
+		execResult, err := clientSession.CallTool(ctx, execParams)
+		require.NoError(t, err)
+		require.NotNil(t, execResult)
+
+		// Extract PID
+		pid, err := extractPIDFromExecResponse(execResult)
+		require.NoError(t, err)
+		require.Greater(t, pid, 0)
+		
+		pids = append(pids, pid)
+		t.Logf("Started process %d with PID: %d", i+1, pid)
+	}
+
+	// Step 2: Wait a bit to ensure all processes are running
+	time.Sleep(200 * time.Millisecond)
+
+	// Step 3: Stop all processes using their PIDs
+	for i, pid := range pids {
+		stopParams := &mcp.CallToolParams{
+			Name: "stop_process",
+			Arguments: map[string]any{
+				"pid":  pid,
+				"kill": false,
+			},
+		}
+
+		stopResult, err := clientSession.CallTool(ctx, stopParams)
+		require.NoError(t, err)
+		require.NotNil(t, stopResult)
+
+		// Verify successful termination
+		stopTextContent, ok := stopResult.Content[0].(*mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, stopTextContent.Text, "Signal SIGTERM sent to process")
+		assert.Contains(t, stopTextContent.Text, fmt.Sprintf("%d", pid))
+
+		t.Logf("Stopped process %d with PID: %d", i+1, pid)
+	}
+
+	t.Logf("Successfully completed workflow with %d processes", numProcesses)
 }
 
 func TestServerNonBlockingBehavior(t *testing.T) {
