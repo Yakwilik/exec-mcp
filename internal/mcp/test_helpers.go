@@ -12,6 +12,19 @@ import (
 
 // extractPIDFromExecResponse extracts the PID from an exec_process tool response
 func extractPIDFromExecResponse(result *mcp.CallToolResult) (int, error) {
+	// First, try to get PID from structured content
+	if result.StructuredContent != nil {
+		// The structured content should contain the ProcessInfo
+		if processInfoMap, ok := result.StructuredContent.(map[string]interface{}); ok {
+			if pidFloat, exists := processInfoMap["pid"]; exists {
+				if pid, ok := pidFloat.(float64); ok {
+					return int(pid), nil
+				}
+			}
+		}
+	}
+
+	// Fallback: try to parse from text content
 	if len(result.Content) == 0 {
 		return 0, fmt.Errorf("no content in response")
 	}

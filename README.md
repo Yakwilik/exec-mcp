@@ -63,13 +63,23 @@ Execute a process and return its PID.
 **Response:**
 ```json
 {
-  "pid": 12345,
-  "command": "ls",
-  "args": ["-l", "/tmp"],
-  "start_time": "2024-01-01T12:00:00Z",
-  "status": "running"
+  "content": [
+    {
+      "type": "text",
+      "text": "Process started successfully:\n{\n  \"pid\": 12345,\n  \"command\": \"ls\",\n  \"args\": [\"-l\", \"/tmp\"],\n  \"start_time\": \"2024-01-01T12:00:00Z\",\n  \"status\": \"running\"\n}"
+    }
+  ],
+  "structuredContent": {
+    "pid": 12345,
+    "command": "ls",
+    "args": ["-l", "/tmp"],
+    "start_time": "2024-01-01T12:00:00Z",
+    "status": "running"
+  }
 }
 ```
+
+**Note:** The `structuredContent` field contains the structured data that can be directly accessed without parsing JSON text.
 
 ### stop_process
 
@@ -90,9 +100,39 @@ Stop a process by its PID using SIGTERM or SIGKILL.
 **Response:**
 ```json
 {
-  "pid": 12345,
-  "signal": "SIGTERM",
-  "status": "signal_sent"
+  "content": [
+    {
+      "type": "text",
+      "text": "Signal SIGTERM sent to process 12345"
+    }
+  ],
+  "structuredContent": {
+    "pid": 12345,
+    "signal": "SIGTERM",
+    "status": "signal_sent"
+  }
+}
+```
+
+## Using Structured Data
+
+The MCP server returns both human-readable text and structured JSON data. For programmatic access, use the `structuredContent` field:
+
+```go
+// Example: Extract PID from exec_process response
+result, err := clientSession.CallTool(ctx, execParams)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Access structured data directly
+if processInfoMap, ok := result.StructuredContent.(map[string]interface{}); ok {
+    if pidFloat, exists := processInfoMap["pid"]; exists {
+        if pid, ok := pidFloat.(float64); ok {
+            processID := int(pid)
+            // Use processID for stop_process
+        }
+    }
 }
 ```
 
@@ -104,6 +144,7 @@ The project is organized into separate packages for maintainability:
 - `./internal/mcp/server.go`: MCP server setup and configuration
 - `./internal/tools/exec/`: Process execution tool
 - `./internal/tools/stop/`: Process termination tool
+- `./internal/mcp/test_helpers.go`: Helper functions for extracting structured data
 
 ## Benefits
 
