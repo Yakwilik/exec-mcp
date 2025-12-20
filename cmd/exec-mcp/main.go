@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	servermcp "exec-mcp/internal/mcp"
+	servermcp "github.com/Yakwilik/exec-mcp/internal/mcp"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

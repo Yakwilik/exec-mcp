@@ -3,15 +3,15 @@ package mcp
 import (
 	"context"
 
+	"github.com/Yakwilik/exec-mcp/internal/tools"
+	"github.com/Yakwilik/exec-mcp/internal/tools/exec"
+	"github.com/Yakwilik/exec-mcp/internal/tools/stop"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"exec-mcp/internal/tools"
-	"exec-mcp/internal/tools/exec"
-	"exec-mcp/internal/tools/stop"
 )
 
 // CreateServer creates and configures the MCP server
 func CreateServer() *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: "exec-mcp", Version: "1.0.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "github.com/Yakwilik/exec-mcp", Version: "1.0.0"}, nil)
 
 	// Create tool instances
 	execTool := exec.NewExecProcessTool()

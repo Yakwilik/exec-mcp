@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
+	exectool "github.com/Yakwilik/exec-mcp/internal/tools/exec"
+	stoptool "github.com/Yakwilik/exec-mcp/internal/tools/stop"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	exectool "exec-mcp/internal/tools/exec"
-	stoptool "exec-mcp/internal/tools/stop"
 )
 
 func TestCreateServer(t *testing.T) {
@@ -26,7 +26,7 @@ func TestServerTools(t *testing.T) {
 
 	// Test that we can connect to the server
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	
+
 	ctx := context.Background()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestServerTools(t *testing.T) {
 		actualNames[tool.Name] = true
 		assert.True(t, expectedNames[tool.Name], "Tool name %s should be in expected tools", tool.Name)
 	}
-	
+
 	// Verify we have all expected tools
 	for expectedName := range expectedNames {
 		assert.True(t, actualNames[expectedName], "Expected tool %s should be present", expectedName)
@@ -68,7 +68,7 @@ func TestServerExecProcessIntegration(t *testing.T) {
 
 	// Set up client-server connection
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	
+
 	ctx := context.Background()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestServerExecProcessIntegration(t *testing.T) {
 	// Test exec_process tool
 	var command string
 	var args []string
-	
+
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "echo", "test"}
@@ -118,7 +118,7 @@ func TestServerStopProcessIntegration(t *testing.T) {
 
 	// Set up client-server connection
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	
+
 	ctx := context.Background()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestServerStopProcessIntegration(t *testing.T) {
 	var cmd *exec.Cmd
 	var command string
 	var args []string
-	
+
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "ping", "127.0.0.1", "-n", "5"}
@@ -141,13 +141,13 @@ func TestServerStopProcessIntegration(t *testing.T) {
 		command = "sleep"
 		args = []string{"5"}
 	}
-	
+
 	cmd = exec.Command(command, args...)
 	err = cmd.Start()
 	require.NoError(t, err)
-	
+
 	pid := cmd.Process.Pid
-	
+
 	// Wait a bit to ensure process is running
 	time.Sleep(100 * time.Millisecond)
 
@@ -182,7 +182,7 @@ func TestServerWorkflowIntegration(t *testing.T) {
 
 	// Set up client-server connection
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	
+
 	ctx := context.Background()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestServerWorkflowIntegration(t *testing.T) {
 	// Step 1: Start a long-running process using exec_process tool
 	var command string
 	var args []string
-	
+
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "ping", "127.0.0.1", "-n", "5"}
@@ -259,7 +259,7 @@ func TestServerMultipleProcessWorkflow(t *testing.T) {
 
 	// Set up client-server connection
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	
+
 	ctx := context.Background()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -278,7 +278,7 @@ func TestServerMultipleProcessWorkflow(t *testing.T) {
 	for i := 0; i < numProcesses; i++ {
 		var command string
 		var args []string
-		
+
 		if runtime.GOOS == "windows" {
 			command = "cmd"
 			args = []string{"/c", "ping", "127.0.0.1", "-n", "3"}
@@ -304,7 +304,7 @@ func TestServerMultipleProcessWorkflow(t *testing.T) {
 		pid, err := extractPIDFromExecResponse(execResult)
 		require.NoError(t, err)
 		require.Greater(t, pid, 0)
-		
+
 		pids = append(pids, pid)
 		t.Logf("Started process %d with PID: %d", i+1, pid)
 	}
@@ -345,7 +345,7 @@ func TestServerNonBlockingBehavior(t *testing.T) {
 
 	// Set up client-server connection
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	
+
 	ctx := context.Background()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -359,7 +359,7 @@ func TestServerNonBlockingBehavior(t *testing.T) {
 	// Test that multiple tool calls don't block each other
 	var command string
 	var args []string
-	
+
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "echo", "test"}
@@ -383,7 +383,7 @@ func TestServerNonBlockingBehavior(t *testing.T) {
 	errors := make(chan error, numCalls)
 
 	start := time.Now()
-	
+
 	for i := 0; i < numCalls; i++ {
 		go func(index int) {
 			result, err := clientSession.CallTool(ctx, params)
@@ -410,7 +410,7 @@ func TestServerNonBlockingBehavior(t *testing.T) {
 	}
 
 	elapsed := time.Since(start)
-	
+
 	// Verify all calls completed quickly (non-blocking)
 	assert.Less(t, elapsed, 3*time.Second, "Concurrent calls should complete quickly")
 	assert.Equal(t, numCalls, completedCalls, "All calls should complete")
@@ -422,7 +422,7 @@ func TestServerErrorHandling(t *testing.T) {
 
 	// Set up client-server connection
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	
+
 	ctx := context.Background()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -461,20 +461,20 @@ func TestServerConcurrentConnections(t *testing.T) {
 	// Test multiple concurrent connections
 	numConnections := 3
 	connections := make([]*mcp.ClientSession, numConnections)
-	
+
 	ctx := context.Background()
-	
+
 	// Create multiple connections
 	for i := 0; i < numConnections; i++ {
 		clientTransport, serverTransport := mcp.NewInMemoryTransports()
-		
+
 		_, err := server.Connect(ctx, serverTransport, nil)
 		require.NoError(t, err)
 
 		client := mcp.NewClient(&mcp.Implementation{Name: fmt.Sprintf("test-client-%d", i), Version: "v1.0.0"}, nil)
 		clientSession, err := client.Connect(ctx, clientTransport, nil)
 		require.NoError(t, err)
-		
+
 		connections[i] = clientSession
 	}
 
