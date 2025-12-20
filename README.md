@@ -4,14 +4,27 @@ A Model Context Protocol (MCP) server that provides tools for executing and mana
 
 ## Features
 
-- **exec_process**: Execute a process and return its PID for later management
+- **exec_process**: Execute a process and return its PID for later management (background execution)
+- **run_command**: Execute a command and return its output immediately (synchronous execution)
 - **stop_process**: Stop a process by its PID using SIGTERM or SIGKILL
-- **Non-blocking**: Processes run detached and don't block the MCP server
+- **Non-blocking**: Background processes run detached and don't block the MCP server
 - **Concurrent**: Multiple processes can be managed simultaneously
 
-## Building
+## Installation
+
+### Using go install (Recommended)
 
 ```bash
+go install github.com/Yakwilik/exec-mcp/cmd/exec-mcp@latest
+```
+
+This will install the `exec-mcp` binary to `$GOPATH/bin` or `$HOME/go/bin` (make sure it's in your PATH).
+
+### Building from source
+
+```bash
+git clone https://github.com/Yakwilik/exec-mcp.git
+cd exec-mcp
 go build -o exec-mcp ./cmd/exec-mcp
 ```
 
@@ -25,6 +38,7 @@ go test ./... -v
 
 # Run specific tool tests
 go test ./internal/tools/exec/ -v
+go test ./internal/tools/run/ -v
 go test ./internal/tools/stop/ -v
 
 # Run integration tests
@@ -38,6 +52,60 @@ The server uses stdio transport for communication:
 ```bash
 ./exec-mcp
 ```
+
+### Connecting to MCP Clients
+
+This MCP server can be connected to any MCP-compatible client, such as:
+- **Claude Desktop** (Anthropic)
+- **Cursor** (with MCP support)
+- Other MCP-compatible agents
+
+#### For Claude Desktop
+
+Add the server to your Claude Desktop configuration file:
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+**Linux:** `~/.config/Claude/claude_desktop_config.json`
+
+If installed via `go install`, use:
+
+```json
+{
+  "mcpServers": {
+    "exec-mcp": {
+      "command": "exec-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+Or if built manually, use the full path:
+
+```json
+{
+  "mcpServers": {
+    "exec-mcp": {
+      "command": "/absolute/path/to/exec-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+**Note:** Make sure `exec-mcp` is in your PATH if using the first option, or use the full path to the binary.
+
+#### For Cursor
+
+If Cursor supports MCP servers, add similar configuration in Cursor's settings.
+
+#### Testing the Connection
+
+After connecting, the client should be able to use these tools:
+- `exec_process` - Start background processes
+- `run_command` - Execute commands synchronously
+- `stop_process` - Stop processes by PID
 
 ## Tools
 
@@ -80,6 +148,51 @@ Execute a process and return its PID.
 ```
 
 **Note:** The `structuredContent` field contains the structured data that can be directly accessed without parsing JSON text.
+
+### run_command
+
+Execute a command and return its output immediately (synchronous execution).
+
+**Parameters:**
+- `command` (string, required): The command to execute
+- `args` (array of strings, optional): Command line arguments
+- `dir` (string, optional): Working directory for the process
+- `env` (array of strings, optional): Environment variables (format: KEY=VALUE)
+- `timeout` (integer, optional): Timeout in seconds (0 means no timeout)
+
+**Example:**
+```json
+{
+  "command": "ls",
+  "args": ["-l", "/tmp"],
+  "dir": "/home/user",
+  "timeout": 10
+}
+```
+
+**Response:**
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Command executed:\n{\n  \"command\": \"ls\",\n  \"args\": [\"-l\", \"/tmp\"],\n  \"exit_code\": 0,\n  \"stdout\": \"total 0\\n-rw-r--r-- 1 user user 0 Jan 1 12:00 file.txt\",\n  \"stderr\": \"\",\n  \"executed_at\": \"2024-01-01T12:00:00Z\",\n  \"duration_seconds\": 0.05,\n  \"success\": true\n}"
+    }
+  ],
+  "structuredContent": {
+    "command": "ls",
+    "args": ["-l", "/tmp"],
+    "exit_code": 0,
+    "stdout": "total 0\n-rw-r--r-- 1 user user 0 Jan 1 12:00 file.txt",
+    "stderr": "",
+    "executed_at": "2024-01-01T12:00:00Z",
+    "duration_seconds": 0.05,
+    "success": true
+  }
+}
+```
+
+**Note:** This tool waits for the command to complete and returns the full output. Use `exec_process` for background execution.
 
 ### stop_process
 
@@ -143,7 +256,8 @@ The project is organized into separate packages for maintainability:
 - `./cmd/exec-mcp/main.go`: Main entry point
 - `./internal/mcp/server.go`: MCP server setup and configuration
 - `./internal/tools/tool.go`: Tool interface definition
-- `./internal/tools/exec/`: Process execution tool (struct-based)
+- `./internal/tools/exec/`: Process execution tool (background, struct-based)
+- `./internal/tools/run/`: Command execution tool (synchronous, struct-based)
 - `./internal/tools/stop/`: Process termination tool (struct-based)
 - `./internal/mcp/test_helpers.go`: Helper functions for extracting structured data
 
@@ -168,10 +282,12 @@ This approach provides:
 ## Benefits
 
 This MCP server enables agents to:
-- Execute processes and get their PIDs for precise management
+- Execute processes and get their PIDs for precise management (background execution)
+- Execute commands and get immediate output (synchronous execution)
 - Stop processes without needing to search for them using terminal commands
 - Manage multiple processes concurrently with their exact process IDs
 - Use proper signal handling (SIGTERM/SIGKILL) for clean process termination
 - Run processes in detached mode without blocking the MCP server
+- Get command output, exit codes, and execution time for synchronous commands
 
 Without this MCP, agents typically need to use terminal commands like `ps`, `grep`, and `kill` to find and manage processes, which is less reliable and more complex.

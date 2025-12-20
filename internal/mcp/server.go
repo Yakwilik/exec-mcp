@@ -5,6 +5,7 @@ import (
 
 	"github.com/Yakwilik/exec-mcp/internal/tools"
 	"github.com/Yakwilik/exec-mcp/internal/tools/exec"
+	"github.com/Yakwilik/exec-mcp/internal/tools/run"
 	"github.com/Yakwilik/exec-mcp/internal/tools/stop"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -16,6 +17,7 @@ func CreateServer() *mcp.Server {
 	// Create tool instances
 	execTool := exec.NewExecProcessTool()
 	stopTool := stop.NewStopProcessTool()
+	runTool := run.NewRunCommandTool()
 
 	// Add tools to server using the generic AddTool with proper schema
 	mcp.AddTool(server, &mcp.Tool{
@@ -32,6 +34,13 @@ func CreateServer() *mcp.Server {
 		return stopTool.Handle(ctx, req)
 	})
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        runTool.Name(),
+		Description: runTool.Description(),
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args run.Args) (*mcp.CallToolResult, any, error) {
+		return runTool.Handle(ctx, req)
+	})
+
 	return server
 }
 
@@ -40,5 +49,6 @@ func GetTools() []tools.Tool {
 	return []tools.Tool{
 		exec.NewExecProcessTool(),
 		stop.NewStopProcessTool(),
+		run.NewRunCommandTool(),
 	}
 }

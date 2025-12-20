@@ -40,7 +40,7 @@ func TestServerTools(t *testing.T) {
 	// Test listing tools
 	tools, err := clientSession.ListTools(ctx, &mcp.ListToolsParams{})
 	require.NoError(t, err)
-	require.Len(t, tools.Tools, 2)
+	require.Len(t, tools.Tools, 3)
 
 	// Get expected tool names from our tool structs
 	expectedTools := GetTools()
