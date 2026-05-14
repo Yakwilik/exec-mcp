@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+package exec_tools.v1;
+
+import "mcp/options/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/Yakwilik/exec-mcp/proto;execmcpv1";
+
+// ExecMcpAPI exposes process management tools via MCP.
+service ExecMcpAPI {
+  option (mcp.options.v1.service) = {
+    description: "Tools for executing and managing processes."
+  };
+
+  // ExecProcess starts a process in the background and returns its PID.
+  rpc ExecProcess(ExecProcessRequest) returns (ExecProcessResponse) {
+    option (mcp.options.v1.method) = {
+      name: "exec_process"
+      title: "Execute Process"
+      description: "Execute a process and return its PID for later management (background execution)."
+      annotations: {
+        read_only_hint: false
+        destructive_hint: false
+        idempotent_hint: false
+      }
+    };
+  }
+
+  // RunCommand executes a command synchronously and returns its output.
+  rpc RunCommand(RunCommandRequest) returns (RunCommandResponse) {
+    option (mcp.options.v1.method) = {
+      name: "run_command"
+      title: "Run Command"
+      description: "Execute a command and return its output immediately (synchronous execution)."
+      annotations: {
+        read_only_hint: false
+        destructive_hint: false
+        idempotent_hint: false
+      }
+    };
+  }
+
+  // StopProcess sends a signal to a process by PID.
+  rpc StopProcess(StopProcessRequest) returns (StopProcessResponse) {
+    option (mcp.options.v1.method) = {
+      name: "stop_process"
+      title: "Stop Process"
+      description: "Stop a process by its PID using SIGTERM or SIGKILL."
+      annotations: {
+        read_only_hint: false
+        destructive_hint: true
+        idempotent_hint: false
+      }
+    };
+  }
+}
+
+// ExecProcessRequest holds parameters for starting a background process.
+message ExecProcessRequest {
+  string command = 1 [(mcp.options.v1.field) = {
+    description: "The command to execute."
+    min_length: 1
+  }];
+
+  repeated string args = 2 [(mcp.options.v1.field) = {
+    description: "Command line arguments."
+  }];
+
+  optional string dir = 3 [(mcp.options.v1.field) = {
+    description: "Working directory for the process."
+  }];
+
+  repeated string env = 4 [(mcp.options.v1.field) = {
+    description: "Environment variables in KEY=VALUE format."
+  }];
+}
+
+// ExecProcessResponse contains information about the started process.
+message ExecProcessResponse {
+  int32 pid = 1;
+  string command = 2;
+  repeated string args = 3;
+  google.protobuf.Timestamp start_time = 4;
+  string status = 5;
+}
+
+// RunCommandRequest holds parameters for synchronous command execution.
+message RunCommandRequest {
+  string command = 1 [(mcp.options.v1.field) = {
+    description: "The command to execute."
+    min_length: 1
+  }];
+
+  repeated string args = 2 [(mcp.options.v1.field) = {
+    description: "Command line arguments."
+  }];
+
+  optional string dir = 3 [(mcp.options.v1.field) = {
+    description: "Working directory for the process."
+  }];
+
+  repeated string env = 4 [(mcp.options.v1.field) = {
+    description: "Environment variables in KEY=VALUE format."
+  }];
+
+  optional int32 timeout = 5 [(mcp.options.v1.field) = {
+    description: "Timeout in seconds. Zero or absent means no timeout."
+    minimum: 0
+  }];
+}
+
+// RunCommandResponse contains the result of synchronous command execution.
+message RunCommandResponse {
+  string command = 1;
+  repeated string args = 2;
+  int32 exit_code = 3;
+  string stdout = 4;
+  string stderr = 5;
+  google.protobuf.Timestamp executed_at = 6;
+  double duration_seconds = 7;
+  bool success = 8;
+}
+
+// StopProcessRequest holds the parameters for stopping a process.
+message StopProcessRequest {
+  int32 pid = 1 [(mcp.options.v1.field) = {
+    description: "The process ID to stop."
+    minimum: 1
+  }];
+
+  optional bool kill = 2 [(mcp.options.v1.field) = {
+    description: "If true, send SIGKILL instead of SIGTERM (force kill)."
+  }];
+}
+
+// StopProcessResponse confirms the signal sent to the process.
+message StopProcessResponse {
+  int32 pid = 1;
+  string signal = 2;
+  string status = 3;
+}

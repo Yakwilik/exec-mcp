@@ -109,7 +109,7 @@ func TestServerExecProcessIntegration(t *testing.T) {
 	// Verify result content
 	textContent, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
-	assert.Contains(t, textContent.Text, "Process started successfully")
+	assert.Contains(t, textContent.Text, `"status":"running"`)
 }
 
 func TestServerStopProcessIntegration(t *testing.T) {
@@ -169,10 +169,8 @@ func TestServerStopProcessIntegration(t *testing.T) {
 	// Verify result content
 	textContent, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
-	assert.Contains(t, textContent.Text, "Signal SIGTERM sent to process")
+	assert.Contains(t, textContent.Text, `"signal":"SIGTERM"`)
 	assert.Contains(t, textContent.Text, fmt.Sprintf("%d", pid))
-
-	// Clean up
 	cmd.Wait()
 }
 
@@ -247,7 +245,7 @@ func TestServerWorkflowIntegration(t *testing.T) {
 	// Step 5: Verify successful termination
 	stopTextContent, ok := stopResult.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
-	assert.Contains(t, stopTextContent.Text, "Signal SIGTERM sent to process")
+	assert.Contains(t, stopTextContent.Text, `"signal":"SIGTERM"`)
 	assert.Contains(t, stopTextContent.Text, fmt.Sprintf("%d", pid))
 
 	t.Logf("Successfully stopped process with PID: %d", pid)
@@ -330,7 +328,7 @@ func TestServerMultipleProcessWorkflow(t *testing.T) {
 		// Verify successful termination
 		stopTextContent, ok := stopResult.Content[0].(*mcp.TextContent)
 		require.True(t, ok)
-		assert.Contains(t, stopTextContent.Text, "Signal SIGTERM sent to process")
+		assert.Contains(t, stopTextContent.Text, `"signal":"SIGTERM"`)
 		assert.Contains(t, stopTextContent.Text, fmt.Sprintf("%d", pid))
 
 		t.Logf("Stopped process %d with PID: %d", i+1, pid)
