@@ -11,7 +11,10 @@ import (
 
 func main() {
 	// Create the MCP server
-	server := servermcp.CreateServer()
+	server, err := servermcp.CreateServer()
+	if err != nil {
+		log.Fatalf("failed to create MCP server: %v", err)
+	}
 
 	// Run the server on stdio transport
 	ctx := context.Background()

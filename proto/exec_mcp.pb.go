@@ -95,7 +95,7 @@ func (x *ExecProcessRequest) GetEnv() []string {
 // ExecProcessResponse contains information about the started process.
 type ExecProcessResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pid           int32                  `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
+	Pid           uint32                 `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
 	Command       string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
 	Args          []string               `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
 	StartTime     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
@@ -134,7 +134,7 @@ func (*ExecProcessResponse) Descriptor() ([]byte, []int) {
 	return file_proto_exec_mcp_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ExecProcessResponse) GetPid() int32 {
+func (x *ExecProcessResponse) GetPid() uint32 {
 	if x != nil {
 		return x.Pid
 	}
@@ -176,7 +176,7 @@ type RunCommandRequest struct {
 	Args          []string               `protobuf:"bytes,2,rep,name=args,proto3" json:"args,omitempty"`
 	Dir           *string                `protobuf:"bytes,3,opt,name=dir,proto3,oneof" json:"dir,omitempty"`
 	Env           []string               `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty"`
-	Timeout       *int32                 `protobuf:"varint,5,opt,name=timeout,proto3,oneof" json:"timeout,omitempty"`
+	Timeout       *uint32                `protobuf:"varint,5,opt,name=timeout,proto3,oneof" json:"timeout,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -239,7 +239,7 @@ func (x *RunCommandRequest) GetEnv() []string {
 	return nil
 }
 
-func (x *RunCommandRequest) GetTimeout() int32 {
+func (x *RunCommandRequest) GetTimeout() uint32 {
 	if x != nil && x.Timeout != nil {
 		return *x.Timeout
 	}
@@ -350,7 +350,7 @@ func (x *RunCommandResponse) GetSuccess() bool {
 // StopProcessRequest holds the parameters for stopping a process.
 type StopProcessRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pid           int32                  `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
+	Pid           uint32                 `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
 	Kill          *bool                  `protobuf:"varint,2,opt,name=kill,proto3,oneof" json:"kill,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -386,7 +386,7 @@ func (*StopProcessRequest) Descriptor() ([]byte, []int) {
 	return file_proto_exec_mcp_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *StopProcessRequest) GetPid() int32 {
+func (x *StopProcessRequest) GetPid() uint32 {
 	if x != nil {
 		return x.Pid
 	}
@@ -403,7 +403,7 @@ func (x *StopProcessRequest) GetKill() bool {
 // StopProcessResponse confirms the signal sent to the process.
 type StopProcessResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pid           int32                  `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
+	Pid           uint32                 `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
 	Signal        string                 `protobuf:"bytes,2,opt,name=signal,proto3" json:"signal,omitempty"`
 	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -440,7 +440,7 @@ func (*StopProcessResponse) Descriptor() ([]byte, []int) {
 	return file_proto_exec_mcp_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *StopProcessResponse) GetPid() int32 {
+func (x *StopProcessResponse) GetPid() uint32 {
 	if x != nil {
 		return x.Pid
 	}
@@ -477,7 +477,7 @@ const file_proto_exec_mcp_proto_rawDesc = "" +
 	"*Environment variables in KEY=VALUE format.R\x03envB\x06\n" +
 	"\x04_dir\"\xa8\x01\n" +
 	"\x13ExecProcessResponse\x12\x10\n" +
-	"\x03pid\x18\x01 \x01(\x05R\x03pid\x12\x18\n" +
+	"\x03pid\x18\x01 \x01(\rR\x03pid\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
 	"\x04args\x18\x03 \x03(\tR\x04args\x129\n" +
 	"\n" +
@@ -492,7 +492,7 @@ const file_proto_exec_mcp_proto_rawDesc = "" +
 	"\"Working directory for the process.H\x00R\x03dir\x88\x01\x01\x12B\n" +
 	"\x03env\x18\x04 \x03(\tB0ڷ,,\n" +
 	"*Environment variables in KEY=VALUE format.R\x03env\x12c\n" +
-	"\atimeout\x18\x05 \x01(\x05BDڷ,@\n" +
+	"\atimeout\x18\x05 \x01(\rBDڷ,@\n" +
 	"4Timeout in seconds. Zero or absent means no timeout.\xa1\x01\x00\x00\x00\x00\x00\x00\x00\x00H\x01R\atimeout\x88\x01\x01B\x06\n" +
 	"\x04_dirB\n" +
 	"\n" +
@@ -508,13 +508,13 @@ const file_proto_exec_mcp_proto_rawDesc = "" +
 	"\x10duration_seconds\x18\a \x01(\x01R\x0fdurationSeconds\x12\x18\n" +
 	"\asuccess\x18\b \x01(\bR\asuccess\"\xaf\x01\n" +
 	"\x12StopProcessRequest\x129\n" +
-	"\x03pid\x18\x01 \x01(\x05B'ڷ,#\n" +
+	"\x03pid\x18\x01 \x01(\rB'ڷ,#\n" +
 	"\x17The process ID to stop.\xa1\x01\x00\x00\x00\x00\x00\x00\xf0?R\x03pid\x12U\n" +
 	"\x04kill\x18\x02 \x01(\bB<ڷ,8\n" +
 	"6If true, send SIGKILL instead of SIGTERM (force kill).H\x00R\x04kill\x88\x01\x01B\a\n" +
 	"\x05_kill\"W\n" +
 	"\x13StopProcessResponse\x12\x10\n" +
-	"\x03pid\x18\x01 \x01(\x05R\x03pid\x12\x16\n" +
+	"\x03pid\x18\x01 \x01(\rR\x03pid\x12\x16\n" +
 	"\x06signal\x18\x02 \x01(\tR\x06signal\x12\x16\n" +
 	"\x06status\x18\x03 \x01(\tR\x06status2\x8a\x05\n" +
 	"\n" +

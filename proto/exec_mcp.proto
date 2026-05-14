@@ -78,7 +78,7 @@ message ExecProcessRequest {
 
 // ExecProcessResponse contains information about the started process.
 message ExecProcessResponse {
-  int32 pid = 1;
+  uint32 pid = 1;
   string command = 2;
   repeated string args = 3;
   google.protobuf.Timestamp start_time = 4;
@@ -104,7 +104,7 @@ message RunCommandRequest {
     description: "Environment variables in KEY=VALUE format."
   }];
 
-  optional int32 timeout = 5 [(mcp.options.v1.field) = {
+  optional uint32 timeout = 5 [(mcp.options.v1.field) = {
     description: "Timeout in seconds. Zero or absent means no timeout."
     minimum: 0
   }];
@@ -124,7 +124,7 @@ message RunCommandResponse {
 
 // StopProcessRequest holds the parameters for stopping a process.
 message StopProcessRequest {
-  int32 pid = 1 [(mcp.options.v1.field) = {
+  uint32 pid = 1 [(mcp.options.v1.field) = {
     description: "The process ID to stop."
     minimum: 1
   }];
@@ -136,7 +136,7 @@ message StopProcessRequest {
 
 // StopProcessResponse confirms the signal sent to the process.
 message StopProcessResponse {
-  int32 pid = 1;
+  uint32 pid = 1;
   string signal = 2;
   string status = 3;
 }

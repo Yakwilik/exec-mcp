@@ -1,7 +1,7 @@
 package mcp
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/Yakwilik/exec-mcp/internal/handler"
 	"github.com/Yakwilik/exec-mcp/internal/tools"
@@ -13,14 +13,14 @@ import (
 )
 
 // CreateServer creates and configures the MCP server using protoc-gen-mcp generated code.
-func CreateServer() *mcp.Server {
+func CreateServer() (*mcp.Server, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "github.com/Yakwilik/exec-mcp", Version: "1.0.0"}, nil)
 
 	if err := execmcpv1.RegisterExecMcpAPITools(server, handler.New()); err != nil {
-		log.Fatalf("failed to register MCP tools: %v", err)
+		return nil, fmt.Errorf("register MCP tools: %w", err)
 	}
 
-	return server
+	return server, nil
 }
 
 // GetTools returns all available tools.

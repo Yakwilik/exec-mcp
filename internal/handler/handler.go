@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,8 +39,11 @@ func (h *Handler) ExecProcess(_ context.Context, req *execmcpv1.ExecProcessReque
 		return nil, fmt.Errorf("error starting process: %w", err)
 	}
 
+	// Reap the child process in the background to prevent zombies.
+	go func() { _ = cmd.Wait() }()
+
 	return &execmcpv1.ExecProcessResponse{
-		Pid:       int32(cmd.Process.Pid),
+		Pid:       uint32(cmd.Process.Pid),
 		Command:   req.Command,
 		Args:      req.Args,
 		StartTime: timestamppb.New(startTime),
@@ -81,10 +85,16 @@ func (h *Handler) RunCommand(ctx context.Context, req *execmcpv1.RunCommandReque
 
 	if runErr != nil {
 		success = false
-		if exitErr, ok := runErr.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(runErr, &exitErr) {
 			exitCode = int32(exitErr.ExitCode())
+			// If the context timed out or was cancelled, signal that via an error.
+			if execCtx.Err() != nil {
+				return nil, fmt.Errorf("command timed out or was cancelled: %w", execCtx.Err())
+			}
 		} else {
-			exitCode = -1
+			// Command could not start or was killed by a non-exit mechanism.
+			return nil, fmt.Errorf("command failed: %w", runErr)
 		}
 	}
 

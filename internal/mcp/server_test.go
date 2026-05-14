@@ -9,33 +9,51 @@ import (
 	"time"
 
 	exectool "github.com/Yakwilik/exec-mcp/internal/tools/exec"
+	runtool "github.com/Yakwilik/exec-mcp/internal/tools/run"
 	stoptool "github.com/Yakwilik/exec-mcp/internal/tools/stop"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreateServer(t *testing.T) {
-	server := CreateServer()
+// newTestServer creates a server for testing and fails the test if it cannot be created.
+func newTestServer(t *testing.T) *mcp.Server {
+	t.Helper()
+	server, err := CreateServer()
+	require.NoError(t, err)
 	require.NotNil(t, server)
+	return server
 }
 
-func TestServerTools(t *testing.T) {
-	server := CreateServer()
-	require.NotNil(t, server)
-
-	// Test that we can connect to the server
+// newTestClientSession connects a test client to the server and returns the session.
+func newTestClientSession(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 
 	ctx := context.Background()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
-	defer serverSession.Close()
+	t.Cleanup(func() { serverSession.Close() })
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
 	require.NoError(t, err)
-	defer clientSession.Close()
+	t.Cleanup(func() { clientSession.Close() })
+
+	return clientSession
+}
+
+func TestCreateServer(t *testing.T) {
+	server, err := CreateServer()
+	require.NoError(t, err)
+	require.NotNil(t, server)
+}
+
+func TestServerTools(t *testing.T) {
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
+
+	ctx := context.Background()
 
 	// Test listing tools
 	tools, err := clientSession.ListTools(ctx, &mcp.ListToolsParams{})
@@ -63,26 +81,13 @@ func TestServerTools(t *testing.T) {
 }
 
 func TestServerExecProcessIntegration(t *testing.T) {
-	server := CreateServer()
-	require.NotNil(t, server)
-
-	// Set up client-server connection
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
 
 	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	require.NoError(t, err)
-	defer serverSession.Close()
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
-	defer clientSession.Close()
-
-	// Test exec_process tool
 	var command string
 	var args []string
-
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "echo", "test"}
@@ -91,49 +96,29 @@ func TestServerExecProcessIntegration(t *testing.T) {
 		args = []string{"test"}
 	}
 
-	// Get tool name from tool struct
 	execTool := exectool.NewExecProcessTool()
-	params := &mcp.CallToolParams{
-		Name: execTool.Name(),
-		Arguments: map[string]any{
-			"command": command,
-			"args":    args,
-		},
-	}
-
-	result, err := clientSession.CallTool(ctx, params)
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      execTool.Name(),
+		Arguments: map[string]any{"command": command, "args": args},
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Len(t, result.Content, 1)
 
-	// Verify result content
 	textContent, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
 	assert.Contains(t, textContent.Text, `"status":"running"`)
 }
 
 func TestServerStopProcessIntegration(t *testing.T) {
-	server := CreateServer()
-	require.NotNil(t, server)
-
-	// Set up client-server connection
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
 
 	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	require.NoError(t, err)
-	defer serverSession.Close()
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
-	defer clientSession.Close()
-
-	// Start a process first
-	var cmd *exec.Cmd
+	// Start a process to stop.
 	var command string
 	var args []string
-
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "ping", "127.0.0.1", "-n", "5"}
@@ -142,31 +127,21 @@ func TestServerStopProcessIntegration(t *testing.T) {
 		args = []string{"5"}
 	}
 
-	cmd = exec.Command(command, args...)
-	err = cmd.Start()
+	cmd := exec.Command(command, args...)
+	err := cmd.Start()
 	require.NoError(t, err)
-
 	pid := cmd.Process.Pid
-
-	// Wait a bit to ensure process is running
 	time.Sleep(100 * time.Millisecond)
 
-	// Test stop_process tool
 	stopTool := stoptool.NewStopProcessTool()
-	params := &mcp.CallToolParams{
-		Name: stopTool.Name(),
-		Arguments: map[string]any{
-			"pid":  pid,
-			"kill": false,
-		},
-	}
-
-	result, err := clientSession.CallTool(ctx, params)
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      stopTool.Name(),
+		Arguments: map[string]any{"pid": pid, "kill": false},
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Len(t, result.Content, 1)
 
-	// Verify result content
 	textContent, ok := result.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
 	assert.Contains(t, textContent.Text, `"signal":"SIGTERM"`)
@@ -174,27 +149,112 @@ func TestServerStopProcessIntegration(t *testing.T) {
 	cmd.Wait()
 }
 
-func TestServerWorkflowIntegration(t *testing.T) {
-	server := CreateServer()
-	require.NotNil(t, server)
-
-	// Set up client-server connection
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+func TestServerRunCommandSuccess(t *testing.T) {
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
 
 	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	require.NoError(t, err)
-	defer serverSession.Close()
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
-	defer clientSession.Close()
-
-	// Step 1: Start a long-running process using exec_process tool
 	var command string
 	var args []string
+	if runtime.GOOS == "windows" {
+		command = "cmd"
+		args = []string{"/c", "echo", "hello"}
+	} else {
+		command = "echo"
+		args = []string{"hello"}
+	}
 
+	runTool := runtool.NewRunCommandTool()
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      runTool.Name(),
+		Arguments: map[string]any{"command": command, "args": args},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "successful command should not set IsError")
+
+	textContent, ok := result.Content[0].(*mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, `"success":true`)
+	assert.Contains(t, textContent.Text, `"exitCode":0`)
+	assert.Contains(t, textContent.Text, "hello")
+}
+
+func TestServerRunCommandNonZeroExit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping shell exit test on Windows")
+	}
+
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
+
+	ctx := context.Background()
+
+	runTool := runtool.NewRunCommandTool()
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      runTool.Name(),
+		Arguments: map[string]any{"command": "sh", "args": []string{"-c", "exit 42"}},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Non-zero exit is returned as a structured response (not a tool error).
+	require.False(t, result.IsError, "non-zero exit should return structured response, not IsError")
+
+	textContent, ok := result.Content[0].(*mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, `"success":false`)
+	assert.Contains(t, textContent.Text, `"exitCode":42`)
+}
+
+func TestServerRunCommandInvalidCommand(t *testing.T) {
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
+
+	ctx := context.Background()
+
+	runTool := runtool.NewRunCommandTool()
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      runTool.Name(),
+		Arguments: map[string]any{"command": "this_command_definitely_does_not_exist_12345"},
+	})
+	require.NoError(t, err) // MCP-level call succeeds; handler returns an error result
+	require.NotNil(t, result)
+	assert.True(t, result.IsError, "invalid command should set IsError")
+}
+
+func TestServerRunCommandTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping timeout test on Windows")
+	}
+
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
+
+	ctx := context.Background()
+
+	runTool := runtool.NewRunCommandTool()
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: runTool.Name(),
+		Arguments: map[string]any{
+			"command": "sleep",
+			"args":    []string{"30"},
+			"timeout": 1,
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError, "timed-out command should set IsError")
+}
+
+func TestServerWorkflowIntegration(t *testing.T) {
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
+
+	ctx := context.Background()
+
+	var command string
+	var args []string
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "ping", "127.0.0.1", "-n", "5"}
@@ -203,80 +263,53 @@ func TestServerWorkflowIntegration(t *testing.T) {
 		args = []string{"5"}
 	}
 
+	// Step 1: Start a long-running process.
 	execTool := exectool.NewExecProcessTool()
-	execParams := &mcp.CallToolParams{
-		Name: execTool.Name(),
-		Arguments: map[string]any{
-			"command": command,
-			"args":    args,
-		},
-	}
-
-	execResult, err := clientSession.CallTool(ctx, execParams)
+	execResult, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      execTool.Name(),
+		Arguments: map[string]any{"command": command, "args": args},
+	})
 	require.NoError(t, err)
 	require.NotNil(t, execResult)
 	require.Len(t, execResult.Content, 1)
 
-	// Step 2: Extract PID from exec_process response
+	// Step 2: Extract PID from exec_process response.
 	pid, err := extractPIDFromExecResponse(execResult)
 	require.NoError(t, err)
 	require.Greater(t, pid, 0, "PID should be greater than 0")
+	t.Logf("Started process with PID: %d", pid)
 
-	t.Logf("Successfully started process with PID: %d", pid)
-
-	// Step 3: Wait a bit to ensure process is running
 	time.Sleep(100 * time.Millisecond)
 
-	// Step 4: Stop the process using the PID from exec_process
+	// Step 3: Stop the process.
 	stopTool := stoptool.NewStopProcessTool()
-	stopParams := &mcp.CallToolParams{
-		Name: stopTool.Name(),
-		Arguments: map[string]any{
-			"pid":  pid, // Use the real PID from exec_process
-			"kill": false,
-		},
-	}
-
-	stopResult, err := clientSession.CallTool(ctx, stopParams)
+	stopResult, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      stopTool.Name(),
+		Arguments: map[string]any{"pid": pid, "kill": false},
+	})
 	require.NoError(t, err)
 	require.NotNil(t, stopResult)
 	require.Len(t, stopResult.Content, 1)
 
-	// Step 5: Verify successful termination
 	stopTextContent, ok := stopResult.Content[0].(*mcp.TextContent)
 	require.True(t, ok)
 	assert.Contains(t, stopTextContent.Text, `"signal":"SIGTERM"`)
 	assert.Contains(t, stopTextContent.Text, fmt.Sprintf("%d", pid))
-
-	t.Logf("Successfully stopped process with PID: %d", pid)
+	t.Logf("Stopped process with PID: %d", pid)
 }
 
 func TestServerMultipleProcessWorkflow(t *testing.T) {
-	server := CreateServer()
-	require.NotNil(t, server)
-
-	// Set up client-server connection
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
 
 	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	require.NoError(t, err)
-	defer serverSession.Close()
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
-	defer clientSession.Close()
-
-	// Test workflow with multiple processes
 	numProcesses := 3
 	pids := make([]int, 0, numProcesses)
 
-	// Step 1: Start multiple processes
 	for i := 0; i < numProcesses; i++ {
 		var command string
 		var args []string
-
 		if runtime.GOOS == "windows" {
 			command = "cmd"
 			args = []string{"/c", "ping", "127.0.0.1", "-n", "3"}
@@ -286,19 +319,12 @@ func TestServerMultipleProcessWorkflow(t *testing.T) {
 		}
 
 		execTool := exectool.NewExecProcessTool()
-		execParams := &mcp.CallToolParams{
-			Name: execTool.Name(),
-			Arguments: map[string]any{
-				"command": command,
-				"args":    args,
-			},
-		}
-
-		execResult, err := clientSession.CallTool(ctx, execParams)
+		execResult, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+			Name:      execTool.Name(),
+			Arguments: map[string]any{"command": command, "args": args},
+		})
 		require.NoError(t, err)
-		require.NotNil(t, execResult)
 
-		// Extract PID
 		pid, err := extractPIDFromExecResponse(execResult)
 		require.NoError(t, err)
 		require.Greater(t, pid, 0)
@@ -307,57 +333,33 @@ func TestServerMultipleProcessWorkflow(t *testing.T) {
 		t.Logf("Started process %d with PID: %d", i+1, pid)
 	}
 
-	// Step 2: Wait a bit to ensure all processes are running
 	time.Sleep(200 * time.Millisecond)
 
-	// Step 3: Stop all processes using their PIDs
 	for i, pid := range pids {
 		stopTool := stoptool.NewStopProcessTool()
-		stopParams := &mcp.CallToolParams{
-			Name: stopTool.Name(),
-			Arguments: map[string]any{
-				"pid":  pid,
-				"kill": false,
-			},
-		}
-
-		stopResult, err := clientSession.CallTool(ctx, stopParams)
+		stopResult, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+			Name:      stopTool.Name(),
+			Arguments: map[string]any{"pid": pid, "kill": false},
+		})
 		require.NoError(t, err)
 		require.NotNil(t, stopResult)
 
-		// Verify successful termination
 		stopTextContent, ok := stopResult.Content[0].(*mcp.TextContent)
 		require.True(t, ok)
 		assert.Contains(t, stopTextContent.Text, `"signal":"SIGTERM"`)
 		assert.Contains(t, stopTextContent.Text, fmt.Sprintf("%d", pid))
-
 		t.Logf("Stopped process %d with PID: %d", i+1, pid)
 	}
-
-	t.Logf("Successfully completed workflow with %d processes", numProcesses)
 }
 
 func TestServerNonBlockingBehavior(t *testing.T) {
-	server := CreateServer()
-	require.NotNil(t, server)
-
-	// Set up client-server connection
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
 
 	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	require.NoError(t, err)
-	defer serverSession.Close()
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
-	defer clientSession.Close()
-
-	// Test that multiple tool calls don't block each other
 	var command string
 	var args []string
-
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "echo", "test"}
@@ -368,39 +370,33 @@ func TestServerNonBlockingBehavior(t *testing.T) {
 
 	execTool := exectool.NewExecProcessTool()
 	params := &mcp.CallToolParams{
-		Name: execTool.Name(),
-		Arguments: map[string]any{
-			"command": command,
-			"args":    args,
-		},
+		Name:      execTool.Name(),
+		Arguments: map[string]any{"command": command, "args": args},
 	}
 
-	// Make multiple concurrent calls
 	numCalls := 5
 	results := make(chan *mcp.CallToolResult, numCalls)
-	errors := make(chan error, numCalls)
+	errs := make(chan error, numCalls)
 
 	start := time.Now()
-
 	for i := 0; i < numCalls; i++ {
-		go func(index int) {
+		go func() {
 			result, err := clientSession.CallTool(ctx, params)
 			if err != nil {
-				errors <- err
+				errs <- err
 				return
 			}
 			results <- result
-		}(i)
+		}()
 	}
 
-	// Collect results
 	completedCalls := 0
 	for completedCalls < numCalls {
 		select {
 		case result := <-results:
 			require.NotNil(t, result)
 			completedCalls++
-		case err := <-errors:
+		case err := <-errs:
 			t.Fatalf("Unexpected error: %v", err)
 		case <-time.After(5 * time.Second):
 			t.Fatal("Timeout waiting for concurrent calls")
@@ -408,61 +404,37 @@ func TestServerNonBlockingBehavior(t *testing.T) {
 	}
 
 	elapsed := time.Since(start)
-
-	// Verify all calls completed quickly (non-blocking)
 	assert.Less(t, elapsed, 3*time.Second, "Concurrent calls should complete quickly")
 	assert.Equal(t, numCalls, completedCalls, "All calls should complete")
 }
 
 func TestServerErrorHandling(t *testing.T) {
-	server := CreateServer()
-	require.NotNil(t, server)
-
-	// Set up client-server connection
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server := newTestServer(t)
+	clientSession := newTestClientSession(t, server)
 
 	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	require.NoError(t, err)
-	defer serverSession.Close()
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v1.0.0"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
-	defer clientSession.Close()
-
-	// Test invalid tool name
 	params := &mcp.CallToolParams{
-		Name: "invalid_tool",
-		Arguments: map[string]any{
-			"test": "value",
-		},
+		Name:      "invalid_tool",
+		Arguments: map[string]any{"test": "value"},
 	}
 
 	result, err := clientSession.CallTool(ctx, params)
-	// The client should handle this gracefully
-	// The exact behavior depends on the MCP SDK implementation
-	// Note: The SDK might return an error or handle it differently
 	if err != nil {
-		// If there's an error, that's also acceptable behavior
 		assert.Error(t, err)
 	} else {
-		// If no error, should get some response
 		assert.NotNil(t, result)
 	}
 }
 
 func TestServerConcurrentConnections(t *testing.T) {
-	server := CreateServer()
-	require.NotNil(t, server)
+	server := newTestServer(t)
 
-	// Test multiple concurrent connections
 	numConnections := 3
 	connections := make([]*mcp.ClientSession, numConnections)
 
 	ctx := context.Background()
 
-	// Create multiple connections
 	for i := 0; i < numConnections; i++ {
 		clientTransport, serverTransport := mcp.NewInMemoryTransports()
 
@@ -476,24 +448,18 @@ func TestServerConcurrentConnections(t *testing.T) {
 		connections[i] = clientSession
 	}
 
-	// Test that all connections can make tool calls
 	for i, conn := range connections {
 		execTool := exectool.NewExecProcessTool()
-		params := &mcp.CallToolParams{
-			Name: execTool.Name(),
-			Arguments: map[string]any{
-				"command": "echo",
-				"args":    []string{fmt.Sprintf("connection-%d", i)},
-			},
-		}
-
-		result, err := conn.CallTool(ctx, params)
+		result, err := conn.CallTool(ctx, &mcp.CallToolParams{
+			Name:      execTool.Name(),
+			Arguments: map[string]any{"command": "echo", "args": []string{fmt.Sprintf("connection-%d", i)}},
+		})
 		require.NoError(t, err)
 		require.NotNil(t, result)
 	}
 
-	// Clean up connections
 	for _, conn := range connections {
 		conn.Close()
 	}
 }
+
