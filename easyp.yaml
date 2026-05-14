@@ -1,0 +1,37 @@
+deps:
+  - github.com/easyp-tech/protoc-gen-mcp@v0.5.0
+
+lint:
+  use:
+    - DIRECTORY_SAME_PACKAGE
+    - PACKAGE_DEFINED
+    - ENUM_FIRST_VALUE_ZERO
+    - ENUM_NO_ALLOW_ALIAS
+    - ENUM_PASCAL_CASE
+    - ENUM_VALUE_UPPER_SNAKE_CASE
+    - FIELD_LOWER_SNAKE_CASE
+    - IMPORT_NO_PUBLIC
+    - IMPORT_NO_WEAK
+    - IMPORT_USED
+    - MESSAGE_PASCAL_CASE
+    - ONEOF_LOWER_SNAKE_CASE
+    - PACKAGE_LOWER_SNAKE_CASE
+    - RPC_PASCAL_CASE
+    - SERVICE_PASCAL_CASE
+    - RPC_NO_CLIENT_STREAMING
+    - RPC_NO_SERVER_STREAMING
+
+generate:
+  inputs:
+    - directory:
+        path: "proto"
+        root: "."
+  plugins:
+    - name: go
+      out: .
+      opts:
+        paths: source_relative
+    - command: ["protoc-gen-mcp"]
+      out: .
+      opts:
+        paths: source_relative
